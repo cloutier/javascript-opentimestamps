@@ -6,11 +6,14 @@ const program = require('commander');
 const OpenTimestamps = require('./src/open-timestamps.js');
 const Utils = require('./src/utils.js');
 const DetachedTimestampFile = require('./src/detached-timestamp-file.js');
+const Timestamp = require('./src/timestamp.js');
 const Ops = require('./src/ops.js');
+const Context = require('./src/context.js');
+const path = require('path');
 
 // Constants
-const path = process.argv[1].split('/');
-const title = path[path.length - 1];
+const currentPath = process.argv[1].split('/');
+const title = currentPath[currentPath.length - 1];
 let isExecuted = false;
 
 // Parse parameters
@@ -78,6 +81,20 @@ const stampCommand = program
       }
 
       stamp(files, parameters);
+    });
+
+const mergeCommand = program
+    .command('merge [FILE...]')
+    .alias('m')
+    .description('Merge timestamps into a single proof')
+    .action((files, options) => {
+      isExecuted = true;
+      if ((files === undefined || files.length < 2) && !options.digest) {
+        console.log(stampCommand.helpInformation());
+        return;
+      }
+
+      merge(files);
     });
 
 const verifyCommand = program
@@ -313,6 +330,48 @@ function upgrade(argsFileOts, options) {
       console.log('Error: ' + err);
       process.exit(1);
     });
+  }).catch(err => {
+    console.log('Error: ' + err);
+    process.exit(1);
+  });
+}
+
+function merge(argsFiles, options) {
+  // check input params : file/hash
+  const filePromises = [];
+  console.log(argsFiles)
+  argsFiles.forEach(argsFile => {
+    filePromises.push(Utils.readFilePromise(argsFile, null));
+  });
+
+  // main promise
+  Promise.all(filePromises).then(values => {
+    let detaches = [];
+    let digests = [];
+    let fileHashOp = [];
+    values.forEach(value => {
+      detaches.push(DetachedTimestampFile.deserialize(value).timestamp);
+      digests.push(DetachedTimestampFile.deserialize(value).fileDigest());
+      fileHashOp.push(DetachedTimestampFile.deserialize(value).fileHashOp);
+    });
+    console.log(fileHashOp);
+    //let merged = detaches.reduce( (x, y) => x.merge(y) )
+//    console.log(typeof detaches[0].merge);
+    let merged = detaches[0].merge(detaches[1]) 
+    console.log(detaches[0].strTree());
+    console.log(typeof detaches[0]);
+//    mergedProof = detaches[0].serializeToBytes();
+let ctx = new Context.StreamSerialization();
+//  detaches[0].serialize(ctx);
+//const buffer = new Buffer(ctx.getOutput());
+//console.log(buffer)
+//console.log(ctx.getOutput())
+    
+const detachedOts2 = new DetachedTimestampFile(fileHashOp[0], detaches[0]);
+const detachedOts = detachedOts2.serializeToBytes();
+//const otsInfoCalc = OpenTimestamps.info(detachedOts);
+    saveOts( path.basename(argsFiles[0]) + ".merged.ots", detachedOts)
+
   }).catch(err => {
     console.log('Error: ' + err);
     process.exit(1);
