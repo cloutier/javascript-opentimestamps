@@ -112,7 +112,7 @@ module.exports = {
       }
 
         // Build markle tree
-      const merkleTip = this.makeMerkleTree(detachedList);
+      const merkleTip = this.makeMerkleTree(detachedList, options.customAppend);
       if (merkleTip === undefined) {
         return reject('Invalid input');
       }
@@ -202,22 +202,28 @@ module.exports = {
      * @param fileTimestamps The list of DetachedTimestampFile.
      * @return merkle tip timestamp.
      */
-  makeMerkleTree(fileTimestamps) {
+  makeMerkleTree(fileTimestamps, customAppend) {
         /* Add nonce:
          * Remember that the files - and their timestamps - might get separated
          * later, so if we didn't use a nonce for every file, the timestamp
          * would leak information on the digests of adjacent files.
          * */
+    if( customAppend && (!customAppend instanceof Array || customAppend instanceof Uint8Array) ) {
+        customAppend = [customAppend];
+    }
+    else {
+        customAppend = [];
+    }
     const merkleRoots = [];
-    fileTimestamps.forEach(fileTimestamp => {
+    fileTimestamps.forEach((fileTimestamp, i) => {
       if (!(fileTimestamp instanceof DetachedTimestampFile)) {
         console.error('Invalid input');
         return undefined;
       }
       try {
-        const bytesRandom16 = Utils.randBytes(16);
+        const appendBytes = customAppend[i] || Utils.randBytes(16);
                 // nonce_appended_stamp = file_timestamp.timestamp.ops.add(OpAppend(os.urandom(16)))
-        const nonceAppendedStamp = fileTimestamp.timestamp.add(new Ops.OpAppend(Utils.arrayToBytes(bytesRandom16)));
+        const nonceAppendedStamp = fileTimestamp.timestamp.add(new Ops.OpAppend(Utils.arrayToBytes(appendBytes)));
                 // merkle_root = nonce_appended_stamp.ops.add(OpSHA256())
         const merkleRoot = nonceAppendedStamp.add(new Ops.OpSHA256());
         merkleRoots.push(merkleRoot);
