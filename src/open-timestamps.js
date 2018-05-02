@@ -208,11 +208,11 @@ module.exports = {
          * later, so if we didn't use a nonce for every file, the timestamp
          * would leak information on the digests of adjacent files.
          * */
-    if( customAppend && (!customAppend instanceof Array || customAppend instanceof Uint8Array) ) {
-        customAppend = [customAppend];
-    }
-    else {
+    if( !customAppend ) {
         customAppend = [];
+    }
+    else if( !customAppend instanceof Array || customAppend instanceof Uint8Array ) {
+        customAppend = [customAppend];
     }
     const merkleRoots = [];
     fileTimestamps.forEach((fileTimestamp, i) => {
@@ -221,11 +221,18 @@ module.exports = {
         return undefined;
       }
       try {
-        const appendBytes = customAppend[i] || Utils.randBytes(16);
-                // nonce_appended_stamp = file_timestamp.timestamp.ops.add(OpAppend(os.urandom(16)))
-        const nonceAppendedStamp = fileTimestamp.timestamp.add(new Ops.OpAppend(Utils.arrayToBytes(appendBytes)));
-                // merkle_root = nonce_appended_stamp.ops.add(OpSHA256())
-        const merkleRoot = nonceAppendedStamp.add(new Ops.OpSHA256());
+        let baseTimestamp;
+        if( customAppend[i] instanceof Uint8Array ) {
+            baseTimestamp = fileTimestamp.timestamp.add(new Ops.OpAppend(Utils.arrayToBytes(customAppend[i])));
+            baseTimestamp = baseTimestamp.add(new Ops.OpSHA256());
+        }
+        else {
+            baseTimestamp = fileTimestamp.timestamp;
+        }
+
+        const appendBytes = Utils.randBytes(16);
+        const appendedStamp = baseTimestamp.add(new Ops.OpAppend(Utils.arrayToBytes(appendBytes)));
+        const merkleRoot = appendedStamp.add(new Ops.OpSHA256());
         merkleRoots.push(merkleRoot);
       } catch (err) {
         return undefined;
