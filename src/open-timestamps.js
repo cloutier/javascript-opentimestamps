@@ -111,16 +111,17 @@ module.exports = {
         return reject('Invalid input');
       }
 
-        // Build markle tree
+      if (!options) {
+        options = {};
+      }
+
+      // Build markle tree
       const merkleTip = this.makeMerkleTree(detachedList, options.customAppend);
       if (merkleTip === undefined) {
         return reject('Invalid input');
       }
 
       // Parse options
-      if (!options) {
-        options = {};
-      }
       if (options.privateCalendars && options.privateCalendars.length > 0) {
         options.publicCalendars = [];
         if (!options.m || options.m === 0) {

@@ -11,6 +11,7 @@ const Ops = require('./ops.js');
 const Timestamp = require('./timestamp.js');
 const Utils = require('./utils.js');
 const Context = require('./context.js');
+const Signatures = require('./signatures.js');
 
 /**
  * Header magic bytes
@@ -151,6 +152,37 @@ class DetachedTimestampFile {
     }
     return new DetachedTimestampFile(fileHashOp, new Timestamp(fdHash));
   }
+
+  /**
+   * Read the Detached Timestamp File from bytes and sign the contents of the file.
+   * @param {Op} fileHashOp - The file hash operation.
+   * @param {StreamDeserialization} ctx - The stream deserialization context.
+   * @param {Object} keyObject - An object containing the private key, the passphrase,
+   * and a name identifying the key.
+   * @return {Promise} A promise that returns the generated {@link DetachedTimestampFile} object
+   * if resolved or {@link reject} if rejected.
+   */
+  static fromBytesAndSign(fileHashOp, buffer, keyObject) {
+    const detached = this.fromBytes(fileHashOp, buffer);
+
+    if( keyObject && keyObject.hasOwnProperty('privateKey') && typeof keyObject.passphrase === 'string' ) {
+      return Signatures.sign(buffer, keyObject.privateKey, keyObject.passphrase)
+      .then(function done(signature) {
+        detached.timestamp.add(new Ops.OpAppend(Utils.arrayToBytes(signature)));
+        detached.timestamp.add(new Ops.OpSHA256());
+        if( keyObject.name ) {
+          detached.timestamp.add(new Ops.OpAppend(Utils.charsToBytes(keyObject.name)));
+          detached.timestamp.add(new Ops.OpSHA256());
+        }
+        return detached;
+      })
+    }
+    else {
+      console.error('no private key provided (or missing information) for signature');
+      return Promise.resolve(detached);
+    }
+  }
+
 
   /**
    * Print the object.
